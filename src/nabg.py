@@ -14,11 +14,13 @@ Rewritten for python3 with additional features by Naveen Unnikrishnan.
 Copyright Naveen Unnikrishnan, January 2021.
 Licensed under the MIT License.
 """
+__version__ = "1.0.0"
 
-import click
 import random
 import re
 from typing import Dict, List
+
+import click
 
 import patterns
 import vocabulary
@@ -246,16 +248,20 @@ def ionize(number_of_sentences: int = 1, topic: str = None):
 # ---------------------------------------------------------------------------- #
 
 
-@click.command()
-@click.option(
-    "--number-of-sentences", "-n", default=1, help="Number of sentences to generate."
-)
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.option("-n", default=1, help="Number of sentences to generate.")
 @click.option(
     "--topic", "-t", default=None, help="Topic on which to generate bullshit."
 )
-def _main(n: int, topic: str):
+@click.option(
+    "--list-topics", "-l", is_flag=True, default=False, help="List available topics."
+)
+def main(n: int, topic: str, list_topics: bool):
+    """
+    Generate new-age bullshit.
+    """
+    if list_topics:
+        for topic in patterns.sentence_patterns.keys():
+            print(topic)
+        return
     print(ionize(n, topic))
-
-
-if __name__ == "__main__":
-    _main()
