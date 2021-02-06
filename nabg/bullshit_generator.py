@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 """
 Generate randomized bullshhit sentences from a given vocabulary. Default vocabulary and sentence structure
 is based on Seb Pearce's "New Age Bullshit Generator". Sentence patterns and vocabulary are defined in the
@@ -14,16 +12,16 @@ Rewritten for python3 with additional features by Naveen Unnikrishnan.
 Copyright Naveen Unnikrishnan, January 2021.
 Licensed under the MIT License.
 """
-__version__ = "1.0.0"
 
+import copy
 import random
 import re
-from typing import Dict, List
+from enum import Enum
+from typing import Dict, List, Optional
 
-import click
-
-import patterns
-import vocabulary
+from .default_patterns import sentence_patterns as patterns
+from .default_vocabulary import bullshit_words as vocabulary
+from .errors import InvalidTopicError, NoPatternsAvailableError
 
 
 class BullshitGenerator:
@@ -37,10 +35,6 @@ class BullshitGenerator:
         vocabulary (Dict[str, List[str]]): The vocabulary of terms separated into types.
     """
 
-    sentence_pool: Dict[str, List[str]]
-    sentence_patterns: Dict[str, List[str]]
-    vocabulary: Dict[str, List[str]]
-
     def __init__(
         self, sentence_patterns: Dict[str, List[str]], vocabulary: Dict[str, List[str]]
     ):
@@ -52,9 +46,74 @@ class BullshitGenerator:
             vocabulary (Dict[str, List[str]]): The vocabulary of terms separated into types.
         """
         self.sentence_pool = sentence_patterns
-        self.sentence_patterns = sentence_patterns
+        self.sentence_patterns = copy.deepcopy(self.sentence_pool)
         self.vocabulary = vocabulary
+        self._auto_reset_patterns = True
+        self._out_of_patterns_behavior = self.OutOfPatternsBehavior.RANDOM_TOPIC
         self.shuffle_sentence_patterns()
+
+    class OutOfPatternsBehavior(Enum):
+        """
+        Possible behavior when no patterns are available for a requested topic.
+
+        Options:
+            RANDOM_TOPIC -- Pick a new available topic at random
+            RESET_POOL -- Reset the pattern pool and continue using the requested topic, albeit with repetitions
+            RAISE_ERROR -- Raise a NoPatternsAvailableError
+        """
+
+        RANDOM_TOPIC = 1
+        RESET_POOL = 2
+        RAISE_ERROR = 3
+
+    def list_topics(self) -> List[str]:
+        """
+        Get available topics.
+
+        Returns:
+            List[str]: List of available topics
+        """
+        return list(self.sentence_pool.keys())
+
+    def list_available_topics(self) -> List[str]:
+        """
+        Get available topics that have unused patterns remaining in the run.
+
+        Returns:
+            List[str]: List of available topics
+        """
+        return list(self.sentence_patterns.keys())
+
+    def enable_auto_reset(self):
+        """
+        Enable auto-resetting of pattern pool once all patterns have been used up.
+        """
+        self._auto_reset_patterns = True
+
+    def disable_auto_reset(self):
+        """
+        Disable auto-resetting of pattern pool once all patterns have been used up.
+        An error is raised if there are no unused patterns available.
+        """
+        self._auto_reset_patterns = False
+
+    def use_random_topic_when_out_of_patterns(self):
+        """
+        Pick a random topic if no unused patterns are available for the requested topic.
+        """
+        self._out_of_patterns_behavior = self.OutOfPatternsBehavior.RANDOM_TOPIC
+
+    def reset_pool_when_out_of_patterns(self):
+        """
+        Reset the pool and reuse patterns if no unused patterns are available for the requested topic.
+        """
+        self._out_of_patterns_behavior = self.OutOfPatternsBehavior.RESET_POOL
+
+    def raise_error_when_out_of_patterns(self):
+        """
+        Raise a NoPatternsAvailableError if no unused patterns are available for the requested topic.
+        """
+        self._out_of_patterns_behavior = self.OutOfPatternsBehavior.RAISE_ERROR
 
     # ---------------------------------------------------------------------------- #
     #                               Utility functions                              #
@@ -118,7 +177,7 @@ class BullshitGenerator:
         """
         Reset sentence patterns for a new run.
         """
-        self.sentence_patterns = self.sentence_pool
+        self.sentence_patterns = copy.deepcopy(self.sentence_pool)
         self.shuffle_sentence_patterns()
 
     def get_random_topic(self) -> str:
@@ -172,12 +231,7 @@ class BullshitGenerator:
         Returns:
             str: Generated sentence
         """
-        try:
-            sentences = self.sentence_patterns[topic]
-            if len(sentences) == 0:
-                raise KeyError
-        except KeyError:
-            raise KeyError("Invalid topic")
+        sentences = self.sentence_patterns[topic]
         pattern = sentences.pop()
         result = self.replace_vocab_patterns(pattern)
         if len(sentences) == 0:
@@ -196,19 +250,53 @@ class BullshitGenerator:
         Returns:
             str: Generated text
         """
-        full_text = ""
+        full_text: str = ""
         for _ in range(number_of_sentences):
+            if sentence_topic not in self.sentence_pool:
+                raise InvalidTopicError(
+                    sentence_topic,
+                    f"Topic {sentence_topic} is not present in the pattern pool",
+                )
+            if len(self.sentence_patterns) == 0:
+                self.handle_empty_patterns_set()
             if sentence_topic not in self.sentence_patterns:
-                sentence_topic = random.choice(list(self.sentence_patterns.keys()))
-            full_text += self.generate_sentence(sentence_topic)
+                if (
+                    self._out_of_patterns_behavior
+                    == self.OutOfPatternsBehavior.RAISE_ERROR
+                ):
+                    raise NoPatternsAvailableError(
+                        sentence_topic, f"Ran out of pattern in topic {sentence_topic}"
+                    )
+                elif (
+                    self._out_of_patterns_behavior
+                    == self.OutOfPatternsBehavior.RESET_POOL
+                ):
+                    self.reset_sentence_patterns()
+                elif (
+                    self._out_of_patterns_behavior
+                    == self.OutOfPatternsBehavior.RANDOM_TOPIC
+                ):
+                    sentence_topic = random.choice(list(self.sentence_patterns.keys()))
+            full_text = full_text + self.generate_sentence(sentence_topic)
         full_text = self.insert_space_between_sentences(full_text)
         return full_text
+
+    def handle_empty_patterns_set(self):
+        """
+        Handle scenarios where all patterns have been used up.
+
+        Raises:
+            NoPatternsAvailableError: If no unused patterns are available and auto-reset is disabled
+        """
+        if not self._auto_reset_patterns:
+            raise NoPatternsAvailableError(message="Ran out of patterns")
+        self.reset_sentence_patterns()
 
     # ---------------------------------------------------------------------------- #
     #                                 Main program                                 #
     # ---------------------------------------------------------------------------- #
 
-    def ionize(self, number_of_sentences: int = 1, topic: str = None) -> str:
+    def ionize(self, number_of_sentences: int = 1, topic: Optional[str] = None) -> str:
         """
         Generate bullshit.
 
@@ -219,6 +307,8 @@ class BullshitGenerator:
         Returns:
             str: Generated bullshit.
         """
+        if len(self.sentence_patterns) == 0:
+            self.handle_empty_patterns_set()
         if topic is None:
             topic = self.get_random_topic()
         return self.generate_text(number_of_sentences, topic)
@@ -229,7 +319,7 @@ class BullshitGenerator:
 # ---------------------------------------------------------------------------- #
 
 
-def ionize(number_of_sentences: int = 1, topic: str = None):
+def ionize(number_of_sentences: int = 1, topic: Optional[str] = None) -> str:
     """
     Generate new-age bullshit.
 
@@ -237,31 +327,15 @@ def ionize(number_of_sentences: int = 1, topic: str = None):
         number_of_sentences (int, optional): Number of sentences to generate. Defaults to 1.
         topic (str, optional): Topic on which to generate text. Picks one at random if not provided.
     """
-    bullshit_generator = BullshitGenerator(
-        patterns.sentence_patterns, vocabulary.bullshit_words
-    )
+    bullshit_generator = BullshitGenerator(patterns, vocabulary)
     return bullshit_generator.ionize(number_of_sentences, topic)
 
 
-# ---------------------------------------------------------------------------- #
-#                                      CLI                                     #
-# ---------------------------------------------------------------------------- #
-
-
-@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
-@click.option("-n", default=1, help="Number of sentences to generate.")
-@click.option(
-    "--topic", "-t", default=None, help="Topic on which to generate bullshit."
-)
-@click.option(
-    "--list-topics", "-l", is_flag=True, default=False, help="List available topics."
-)
-def main(n: int, topic: str, list_topics: bool):
+def list_topics() -> List[str]:
     """
-    Generate new-age bullshit.
+    Get available topics.
+
+    Returns:
+        List[str]: List of available topics
     """
-    if list_topics:
-        for topic in patterns.sentence_patterns.keys():
-            print(topic)
-        return
-    print(ionize(n, topic))
+    return list(patterns.keys())

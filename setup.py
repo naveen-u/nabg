@@ -1,14 +1,17 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
     name="nabg",
-    version="1.0.1",
+    version="1.0.2",
     description="A customizable bullshit generator based on Seb Pearce's 'New-Age Bullshit Generator'",
-    py_modules=["nabg", "patterns", "vocabulary"],
-    package_dir={"": "src"},
+    packages=find_packages(
+        include=[
+            "nabg",
+        ],
+    ),
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
@@ -26,7 +29,7 @@ setup(
     author_email="naveenunnikrishnan98@gmail.com",
     entry_points={
         "console_scripts": [
-            "nabg=nabg:main",
+            "nabg=nabg.__main__:main",
         ]
     },
 )
