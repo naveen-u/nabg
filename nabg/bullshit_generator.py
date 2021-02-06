@@ -24,6 +24,9 @@ from .default_vocabulary import bullshit_words as vocabulary
 from .errors import InvalidTopicError, NoPatternsAvailableError
 
 
+__all__ = ["BullshitGenerator", "ionize", "list_topics", "patterns", "vocabulary"]
+
+
 class BullshitGenerator:
     """
     BullshitGenerator class. Feed it sentence patterns and associated vocabulary
