@@ -1,8 +1,9 @@
 # nabg (New-Age Bullshit Generator)
 
 [![PyPI version](https://badge.fury.io/py/nabg.svg)](https://badge.fury.io/py/nabg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
+![LGTM Grade](https://img.shields.io/lgtm/grade/python/github/naveen-u/nabg?label=Code%20Quality&logo=LGTM)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 
 ## What is it?
 
